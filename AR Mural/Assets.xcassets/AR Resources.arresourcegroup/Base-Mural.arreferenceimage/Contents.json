@@ -10,7 +10,7 @@
     "version" : 1
   },
   "properties" : {
-    "unit" : "centimeters",
-    "width" : 28
+    "unit" : "feet",
+    "width" : 55
   }
 }
