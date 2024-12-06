@@ -13,7 +13,6 @@ class StatusViewController: UIViewController {
         label.layer.cornerRadius = 10
         label.clipsToBounds = true
         label.numberOfLines = 0
-        // Add padding using constraints instead of a non-existent padding property
         label.layoutMargins = UIEdgeInsets(top: 8, left: 12, bottom: 8, right: 12)
         return label
     }()
@@ -27,7 +26,6 @@ class StatusViewController: UIViewController {
         view.addSubview(messageLabel)
         messageLabel.translatesAutoresizingMaskIntoConstraints = false
         
-        // Add padding using layout margins
         let containerView = UIView()
         containerView.backgroundColor = .clear
         containerView.addSubview(messageLabel)
@@ -72,20 +70,37 @@ class ARViewController: UIViewController, ARSessionDelegate {
         "book": "Robot-Talk-On-Coms"
     ]
     
+    // New audio pairs
+    let imageAudioPairs: [String: String] = [
+        "book": "song"
+    ]
+    
     // Entities and players
     var currentVideoNode: ModelEntity?
     var currentPlayer: AVPlayer?
     var currentModelEntity: Entity?
+    var currentAudioPlayer: AVAudioPlayer?
     var isAnimationPlaying = false
     
     // UI Elements
     var resetButton: UIButton!
     var animationButton: UIButton!
+    var audioButton: UIButton!
     
     override func viewDidLoad() {
         super.viewDidLoad()
         setupAR()
         setupUI()
+        setupAudioSession()
+    }
+    
+    private func setupAudioSession() {
+        do {
+            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
+            try AVAudioSession.sharedInstance().setActive(true)
+        } catch {
+            print("Failed to set up audio session: \(error)")
+        }
     }
     
     private func setupAR() {
@@ -117,12 +132,23 @@ class ARViewController: UIViewController, ARSessionDelegate {
         animationButton.addTarget(self, action: #selector(toggleAnimation), for: .touchUpInside)
         animationButton.isHidden = true
         
+        // Audio Button
+        audioButton = UIButton(type: .system)
+        audioButton.setImage(UIImage(systemName: "speaker.wave.2.circle.fill"), for: .normal)
+        audioButton.tintColor = .white
+        audioButton.backgroundColor = UIColor.black.withAlphaComponent(0.7)
+        audioButton.layer.cornerRadius = 25
+        audioButton.addTarget(self, action: #selector(toggleAudio), for: .touchUpInside)
+        audioButton.isHidden = true
+        
         view.addSubview(resetButton)
         view.addSubview(animationButton)
+        view.addSubview(audioButton)
         
         // Layout
         resetButton.translatesAutoresizingMaskIntoConstraints = false
         animationButton.translatesAutoresizingMaskIntoConstraints = false
+        audioButton.translatesAutoresizingMaskIntoConstraints = false
         
         NSLayoutConstraint.activate([
             resetButton.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -20),
@@ -133,7 +159,12 @@ class ARViewController: UIViewController, ARSessionDelegate {
             animationButton.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -20),
             animationButton.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 20),
             animationButton.widthAnchor.constraint(equalToConstant: 50),
-            animationButton.heightAnchor.constraint(equalToConstant: 50)
+            animationButton.heightAnchor.constraint(equalToConstant: 50),
+            
+            audioButton.bottomAnchor.constraint(equalTo: animationButton.topAnchor, constant: -20),
+            audioButton.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 20),
+            audioButton.widthAnchor.constraint(equalToConstant: 50),
+            audioButton.heightAnchor.constraint(equalToConstant: 50)
         ])
     }
     
@@ -151,6 +182,8 @@ class ARViewController: UIViewController, ARSessionDelegate {
         currentVideoNode = nil
         currentPlayer?.pause()
         currentModelEntity = nil
+        currentAudioPlayer?.stop()
+        currentAudioPlayer = nil
         
         let config = ARWorldTrackingConfiguration()
         config.detectionImages = referenceImages
@@ -175,6 +208,12 @@ class ARViewController: UIViewController, ARSessionDelegate {
             if let modelName = imageModelPairs[imageName],
                let modelURL = Bundle.main.url(forResource: modelName, withExtension: "usdz") {
                 setupModel(for: imageAnchor, with: modelURL)
+            }
+            
+            // Handle audio content
+            if let audioName = imageAudioPairs[imageName],
+               let audioURL = Bundle.main.url(forResource: audioName, withExtension: "wav") {
+                setupAudio(with: audioURL)
             }
         }
     }
@@ -213,20 +252,16 @@ class ARViewController: UIViewController, ARSessionDelegate {
         do {
             let loadedEntity = try Entity.load(contentsOf: modelURL)
             
-            // Position the model - increase Y to lift it higher above the image
-            loadedEntity.position = [0, 0.3, 0]  // Increased from 0.15 to 0.3
-            loadedEntity.scale = [0.3, 0.3, 0.3]  // Initial scale
+            loadedEntity.position = [0, 0.3, 0]
+            loadedEntity.scale = [0.3, 0.3, 0.3]
             
-            // Modified rotation to stand upright from horizontal surface
-            let rotation = simd_quatf(angle: 0, axis: [1, 0, 0]) // Remove rotation since we want it vertical
+            let rotation = simd_quatf(angle: 0, axis: [1, 0, 0])
             loadedEntity.orientation = rotation
             
-            // Create anchor and add model
             let anchorEntity = AnchorEntity(anchor: imageAnchor)
             anchorEntity.addChild(loadedEntity)
             arView.scene.addAnchor(anchorEntity)
             
-            // Store reference and handle animation
             currentModelEntity = loadedEntity
             
             if !loadedEntity.availableAnimations.isEmpty {
@@ -244,6 +279,20 @@ class ARViewController: UIViewController, ARSessionDelegate {
         }
     }
     
+    private func setupAudio(with audioURL: URL) {
+        do {
+            currentAudioPlayer = try AVAudioPlayer(contentsOf: audioURL)
+            currentAudioPlayer?.prepareToPlay()
+            currentAudioPlayer?.numberOfLoops = -1 // Loop indefinitely
+            currentAudioPlayer?.play()
+            audioButton.isHidden = false
+            statusViewController.showMessage("Audio playing")
+        } catch {
+            print("Failed to load audio: \(error)")
+            statusViewController.showMessage("Failed to load audio")
+        }
+    }
+    
     @objc func toggleAnimation() {
         guard let entity = currentModelEntity,
               !entity.availableAnimations.isEmpty else { return }
@@ -258,8 +307,19 @@ class ARViewController: UIViewController, ARSessionDelegate {
         
         isAnimationPlaying.toggle()
     }
- }
-
+    
+    @objc func toggleAudio() {
+        guard let audioPlayer = currentAudioPlayer else { return }
+        
+        if audioPlayer.isPlaying {
+            audioPlayer.pause()
+            audioButton.setImage(UIImage(systemName: "speaker.slash.circle.fill"), for: .normal)
+        } else {
+            audioPlayer.play()
+            audioButton.setImage(UIImage(systemName: "speaker.wave.2.circle.fill"), for: .normal)
+        }
+    }
+}
 
 // SwiftUI View
 struct ContentView: View {
