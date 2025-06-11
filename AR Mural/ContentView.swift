@@ -63,7 +63,10 @@ class ARViewController: UIViewController, ARSessionDelegate {
     
     // Resource pairs
     let imageVideoPairs: [String: String] = [
-        "Base-Mural": "video"
+        "Base-Mural": "video",
+        "Base-Mural2": "video2",
+        "Base-Mural3": "video3"
+        
     ]
     
     let imageModelPairs: [String: String] = [
@@ -73,6 +76,7 @@ class ARViewController: UIViewController, ARSessionDelegate {
     // New audio pairs
     let imageAudioPairs: [String: String] = [
         "book": "song"
+        
     ]
     
     // Entities and players
